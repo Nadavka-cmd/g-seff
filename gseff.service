@@ -1,0 +1,14 @@
+[Unit]
+Description=G-seff GPU Efficiency Reporter
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/gseff
+ExecStart=/opt/gseff/venv/bin/uvicorn app:app --host 127.0.0.1 --port 8766
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
