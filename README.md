@@ -2,7 +2,7 @@
 
 A web-based GPU job efficiency reporter for HPC clusters running Slurm and OpenOnDemand.
 
-Deployed as an OOD app at `ece-hpc.bgu.ac.il/gseff/` for the ECE HPC Cluster at Ben-Gurion University.
+Deployed as an OOD app for the ECE HPC Cluster at Ben-Gurion University.
 
 ![G-seff screenshot](docs/screenshot.png)
 
