@@ -329,6 +329,7 @@ footer{border-top:1px solid var(--border);padding-top:20px;display:flex;align-it
       <option value="">All</option>
       <option value="low">Low only</option>
       <option value="ok">OK only</option>
+      <option value="excellent">Excellent only</option>
       <option value="na">N/A only</option>
     </select>
     <div class="filter-sep"></div>
@@ -382,7 +383,7 @@ footer{border-top:1px solid var(--border);padding-top:20px;display:flex;align-it
 <footer>
   <div class="foot-l">
     <div>GPU utilization via Prometheus &nbsp;·&nbsp; CPU &amp; memory via Slurm job accounting</div>
-    <div>ECE HPC · Ben-Gurion University of the Negev</div>
+    <div>ECE HPC · Ben-Gurion University of the Negev · Built by Nadav Kama</div>
   </div>
   <button class="btn-ghost" onclick="exportCSV()">↓ Export CSV</button>
 </footer>
@@ -536,7 +537,8 @@ function applyAdminFilters(){
 
   // Filter by status
   if (status === 'low') users = users.filter(u => u.avg_gpu_eff !== null && u.avg_gpu_eff < 30);
-  if (status === 'ok')  users = users.filter(u => u.avg_gpu_eff !== null && u.avg_gpu_eff >= 30);
+  if (status === 'ok')  users = users.filter(u => u.avg_gpu_eff !== null && u.avg_gpu_eff >= 30 && u.avg_gpu_eff < 70);
+  if (status === 'excellent') users = users.filter(u => u.avg_gpu_eff !== null && u.avg_gpu_eff >= 70);
   if (status === 'na')  users = users.filter(u => u.avg_gpu_eff === null);
 
   // Filter by account
