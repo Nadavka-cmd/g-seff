@@ -42,7 +42,7 @@ def get_jobs_sacct(user: Optional[str] = None) -> list[dict]:
 
     cmd = [
         SACCT_BIN, "--allusers", "--starttime", start,
-        "--format", "JobID,User,NodeList,Partition,Start,End,AllocTRES,AllocCPUS,AveCPU,ReqMem,MaxRSS,State",
+        "--format", "JobID,User,Account,NodeList,Partition,Start,End,AllocTRES,AllocCPUS,AveCPU,ReqMem,MaxRSS,State",
         "--parsable2", "--noheader",
     ]
     if user:
@@ -59,10 +59,10 @@ def get_jobs_sacct(user: Optional[str] = None) -> list[dict]:
 
     for line in result.stdout.strip().splitlines():
         parts = line.split("|")
-        if len(parts) < 12:
+        if len(parts) < 13:
             continue
 
-        job_id, user_, nodelist, partition, start_s, end_s, alloctres, alloccpus, avecpu, reqmem, maxrss, state = parts[:12]
+        job_id, user_, account, nodelist, partition, start_s, end_s, alloctres, alloccpus, avecpu, reqmem, maxrss, state = parts[:13]
 
         # Collect .batch step for CPU/mem (parent job line has empty AveCPU/MaxRSS)
         if job_id.endswith(".batch"):
@@ -107,6 +107,7 @@ def get_jobs_sacct(user: Optional[str] = None) -> list[dict]:
             "gpu_eff":    None,
             "flagged":    False,
             "reqmem":     reqmem,
+            "account":    account,
         }
 
     # Enrich with batch step CPU/mem
@@ -269,6 +270,7 @@ def serialize_job(j: dict) -> dict:
         "job_id":     j["job_id"],
         "user":       j["user"],
         "partition":  j.get("partition", ""),
+        "account":    j.get("account", ""),
         "nodes":      j["nodes"],
         "gpus":       j["gpus"],
         "gpu_eff":    round(j["gpu_eff"], 1) if j["gpu_eff"] is not None else None,
@@ -336,6 +338,7 @@ async def all_users(request: Request):
             "user": j["user"], "jobs": 0,
             "gpu_effs": [], "cpu_effs": [], "mem_effs": [],
             "flagged": 0, "gpu_hours": 0.0,
+            "account": j.get("account", ""),
         })
         u["jobs"] += 1
         if j["gpu_eff"] is not None: u["gpu_effs"].append(j["gpu_eff"])
@@ -345,14 +348,16 @@ async def all_users(request: Request):
         u["gpu_hours"] += j["gpus"] * j["duration_h"]
 
     users = sorted([{
-        "user":        u["user"],
-        "jobs":        u["jobs"],
-        "avg_gpu_eff": avg(u["gpu_effs"]),
-        "avg_cpu_eff": avg(u["cpu_effs"]),
-        "avg_mem_eff": avg(u["mem_effs"]),
-        "flagged":     u["flagged"],
-        "gpu_hours":   round(u["gpu_hours"], 1),
-        "is_flagged":  (avg(u["gpu_effs"]) or 100) < EFFICIENCY_THRESHOLD,
+        "user":           u["user"],
+        "jobs":           u["jobs"],
+        "measured_jobs":  len(u["gpu_effs"]),
+        "avg_gpu_eff":    avg(u["gpu_effs"]),
+        "avg_cpu_eff":    avg(u["cpu_effs"]),
+        "avg_mem_eff":    avg(u["mem_effs"]),
+        "flagged":        u["flagged"],
+        "gpu_hours":      round(u["gpu_hours"], 1),
+        "is_flagged":     len(u["gpu_effs"]) > 0 and avg(u["gpu_effs"]) < EFFICIENCY_THRESHOLD,
+        "account":        u.get("account", ""),
     } for u in user_map.values()], key=lambda x: (x["avg_gpu_eff"] or 999))
 
     all_gpu = [j["gpu_eff"] for j in jobs if j["gpu_eff"] is not None]

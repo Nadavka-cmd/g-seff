@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G-seff — GPU Efficiency v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f0f2f5;--surface:#fff;--border:#dde3ea;--border2:#c4cfd8;
+  --text:#1a2530;--muted:#5e7080;--dim:#9aaab5;
+  --orange:#d95f0a;--orange-d:#b54d08;--orange-bg:#fff2e8;--orange-lt:#fdd5b0;
+  --blue:#1760a8;--blue-d:#104d87;--blue-bg:#e6f0fb;--blue-lt:#b8d4f5;
+  --green:#1a7a4a;--green-bg:#e8f7ee;--green-lt:#b8e8cc;
+  --purple:#7c3aed;--purple-bg:#f3eeff;--purple-lt:#ddd0f8;
+  --danger:#b82030;--danger-bg:#fdeef0;--danger-lt:#f5bcc4;
+  --mono:'IBM Plex Mono',monospace;--sans:'Inter',sans-serif;
+  --r:8px;--sh:0 1px 3px rgba(0,0,0,.06),0 4px 14px rgba(0,0,0,.05)
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;-webkit-font-smoothing:antialiased}
+.page{max-width:1100px;margin:0 auto;padding:0 24px 64px}
+
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border);margin-bottom:24px}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-badge{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,var(--orange),var(--blue));color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;padding:5px 12px;border-radius:6px;letter-spacing:.04em}
+.brand-sub{font-size:12px;color:var(--muted)}
+.brand-sub strong{color:var(--text);font-weight:600}
+.topbar-right{font-family:var(--mono);font-size:11px;color:var(--dim);text-align:right;line-height:1.8}
+
+@keyframes up{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.a0{animation:up .3s ease both}.a1{animation:up .3s .05s ease both}.a2{animation:up .3s .08s ease both}
+.a3{animation:up .3s .11s ease both}.a4{animation:up .3s .14s ease both}.a5{animation:up .3s .17s ease both}
+
+.view-toggle{display:flex;align-items:center;gap:8px;margin-bottom:20px}
+.vtab{font-size:12px;font-weight:500;padding:6px 16px;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface);color:var(--muted);cursor:pointer;transition:all .15s}
+.vtab.active{background:var(--blue);border-color:var(--blue);color:#fff}
+.vtab:hover:not(.active){border-color:var(--blue);color:var(--blue)}
+.admin-pill{font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;padding:3px 9px;background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-lt);border-radius:20px}
+
+.hero{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);padding:24px 28px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:20px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--orange),var(--blue))}
+.hero-left{display:flex;align-items:center;gap:16px}
+.avatar{width:50px;height:50px;border-radius:10px;background:linear-gradient(135deg,var(--orange-bg),var(--blue-bg));border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:18px;font-weight:600;color:var(--orange);text-transform:uppercase;flex-shrink:0}
+.hero-name{font-size:20px;font-weight:700;letter-spacing:-.02em;margin-bottom:2px}
+.hero-sub{font-size:12px;color:var(--muted)}
+.hero-right{display:flex;align-items:center;gap:28px}
+
+.ring-wrap{position:relative;width:92px;height:92px;flex-shrink:0}
+.ring-wrap svg{transform:rotate(-90deg)}
+.ring-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.ring-pct{font-family:var(--mono);font-size:18px;font-weight:600}
+.ring-tiny{font-size:10px;color:var(--muted);margin-top:2px}
+
+.mini-gauges{display:flex;flex-direction:column;gap:12px;min-width:160px}
+.mini-gauge-row{display:flex;flex-direction:column;gap:4px}
+.mini-gauge-hdr{display:flex;align-items:center;justify-content:space-between}
+.mini-gauge-label{font-size:11px;font-weight:500;color:var(--muted);letter-spacing:.04em}
+.mini-gauge-val{font-family:var(--mono);font-size:11px;font-weight:500}
+.mini-track{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.mini-fill{height:100%;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)}
+.mini-fill.cpu{background:var(--green)}
+.mini-fill.mem{background:var(--purple)}
+
+.gauge-meta{font-size:12px;color:var(--muted);line-height:2.2}
+.gauge-meta b{font-family:var(--mono);font-weight:500;color:var(--text)}
+
+.stat-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;box-shadow:var(--sh)}
+.stat-lbl{font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+.stat-val{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--text);line-height:1;margin-bottom:4px}
+.stat-val .u{font-size:13px;font-weight:400;color:var(--muted)}
+.stat-hint{font-size:11px;color:var(--muted)}
+
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.sec-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);display:flex;align-items:center;gap:8px}
+.sec-title::before{content:'';width:16px;height:2px;background:var(--orange);border-radius:1px}
+.thresh-note{font-size:11px;color:var(--dim);font-family:var(--mono)}
+
+.tcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:visible;box-shadow:var(--sh);margin-bottom:24px}
+table{width:100%;border-collapse:collapse}
+thead th{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);padding:11px 16px;background:var(--bg);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
+th.r,td.r{text-align:right}th.c,td.c{text-align:center;position:relative;overflow:visible}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:#f6f8fa}
+td{padding:12px 16px;font-size:13px;vertical-align:middle}
+td.mono{font-family:var(--mono);font-size:12px}
+
+.ucell{display:flex;align-items:center;gap:10px}
+.uavatar{width:28px;height:28px;border-radius:6px;background:var(--blue-bg);border:1px solid var(--blue-lt);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:11px;font-weight:600;color:var(--blue);text-transform:uppercase;flex-shrink:0}
+.uname{font-family:var(--mono);font-size:12px;font-weight:500}
+
+.gbar{display:flex;align-items:center;gap:10px;min-width:140px}
+.gtrack{flex:1;height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.gfill{height:100%;border-radius:3px;transition:width .7s cubic-bezier(.4,0,.2,1)}
+.gfill.excellent{background:var(--green)}.gfill.good{background:var(--blue)}.gfill.bad{background:var(--danger)}
+.gval{font-family:var(--mono);font-size:12px;font-weight:600;min-width:42px;text-align:right}
+.gval.excellent{color:var(--green)}.gval.good{color:var(--blue)}.gval.bad{color:var(--danger)}
+
+.res-cell{display:flex;flex-direction:column;gap:5px;min-width:120px}
+.res-row{display:flex;align-items:center;gap:6px}
+.res-key{font-size:10px;font-weight:500;color:var(--dim);width:26px;flex-shrink:0;letter-spacing:.04em}
+.res-track{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.res-fill{height:100%;border-radius:2px;transition:width .7s cubic-bezier(.4,0,.2,1)}
+.res-fill.cpu{background:var(--green)}.res-fill.mem{background:var(--purple)}
+.res-val{font-family:var(--mono);font-size:10px;color:var(--muted);min-width:32px;text-align:right}
+
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:4px}
+.badge-ok{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-lt)}
+.badge-warn{background:var(--orange-bg);color:var(--orange);border:1px solid var(--orange-lt)}
+.badge-bad{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-lt)}
+.badge-na{background:var(--bg);color:var(--dim);border:1px solid var(--border)}
+
+.has-tip{position:relative;cursor:help}
+.has-tip::after{
+  content:attr(data-tip);
+  position:absolute;
+  bottom:calc(100% + 8px);
+  right:0;left:auto;transform:none;
+  background:#1a2530;color:#e2edf5;
+  font-family:var(--mono);font-size:11px;font-weight:400;
+  padding:7px 11px;border-radius:5px;
+  white-space:nowrap;pointer-events:none;
+  opacity:0;transition:opacity .15s;z-index:9999;
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+  letter-spacing:0;text-transform:none
+}
+.has-tip::before{
+  content:'';position:absolute;
+  bottom:calc(100% + 2px);right:14px;left:auto;transform:none;
+  border:5px solid transparent;border-top-color:#1a2530;
+  pointer-events:none;opacity:0;transition:opacity .15s;z-index:9999
+}
+.has-tip:hover::after,.has-tip:hover::before{opacity:1}
+
+.ptag{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:4px;background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-lt)}
+
+.coll-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;border-bottom:1px solid var(--border);background:var(--bg);user-select:none;transition:background .1s}
+.coll-hdr:hover{background:#e8ecf0}
+.chevron{font-size:10px;color:var(--dim);transition:transform .2s}
+.coll-hdr.open .chevron{transform:rotate(180deg)}
+.coll-body{display:none;overflow-x:auto}
+.coll-body.open{display:block}
+.cnt-badge{display:inline-block;font-family:var(--mono);font-size:10px;padding:2px 7px;background:var(--border);border-radius:20px;color:var(--muted);margin-left:6px}
+
+footer{border-top:1px solid var(--border);padding-top:20px;display:flex;align-items:center;justify-content:space-between}
+.foot-l{font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.9}
+.foot-l strong{color:var(--muted);font-weight:500}
+.btn-ghost{font-size:11px;font-weight:500;padding:7px 16px;border-radius:var(--r);border:1.5px solid var(--border2);background:var(--surface);color:var(--muted);cursor:pointer;transition:all .15s}
+.btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+.empty{padding:40px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:12px}
+
+.filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.filter-bar label{font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.filter-bar select{
+  font-size:12px;font-family:var(--mono);padding:5px 10px;
+  border:1px solid var(--border2);border-radius:5px;
+  background:var(--surface);color:var(--text);cursor:pointer;
+  transition:border-color .15s;outline:none
+}
+.filter-bar select:focus{border-color:var(--blue)}
+.filter-sep{width:1px;height:20px;background:var(--border);margin:0 4px}
+.result-count{font-family:var(--mono);font-size:11px;color:var(--dim);margin-left:auto}
+
+@media(max-width:860px){
+  .stat-strip{grid-template-columns:repeat(2,1fr)}
+  .hero{flex-direction:column;align-items:flex-start}
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-badge">G-seff</div>
+    <div class="brand-sub">GPU Slurm Efficiency &nbsp;·&nbsp; <strong>ECE HPC Cluster</strong></div>
+  </div>
+  <div class="topbar-right" style="display:flex;align-items:center;gap:16px">
+    <div style="text-align:right">
+      <div>Last 15 days</div>
+      <div id="gen-time">—</div>
+    </div>
+    <button id="refresh-btn" onclick="refreshData()" style="font-size:11px;font-weight:600;padding:7px 14px;border-radius:6px;border:1.5px solid var(--border2);background:var(--surface);color:var(--muted);cursor:pointer;transition:all .15s;white-space:nowrap" onmouseover="this.style.borderColor='var(--blue)';this.style.color='var(--blue)'" onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">↻ Refresh</button>
+  </div>
+</div>
+
+<div class="view-toggle a0">
+  <button class="vtab active" onclick="setView('user')">My Jobs</button>
+  <button class="vtab" id="admin-tab" onclick="setView('admin')" style="display:none">
+    All Users <span class="admin-pill">Admin</span>
+  </button>
+</div>
+
+<!-- USER VIEW -->
+<div id="view-user">
+  <div class="hero a1">
+    <div class="hero-left">
+      <div class="avatar" id="hero-initials">—</div>
+      <div>
+        <div class="hero-name" id="hero-name">—</div>
+        <div class="hero-sub" id="hero-sub">—</div>
+      </div>
+    </div>
+    <div class="hero-right">
+      <div>
+        <div class="ring-wrap">
+          <svg width="92" height="92" viewBox="0 0 92 92">
+            <circle cx="46" cy="46" r="37" fill="none" stroke="#dde3ea" stroke-width="8"/>
+            <circle id="ring-fill" cx="46" cy="46" r="37" fill="none" stroke="var(--blue)"
+              stroke-width="8" stroke-linecap="round"
+              stroke-dasharray="232" stroke-dashoffset="232"
+              style="transition:stroke-dashoffset 1s cubic-bezier(.4,0,.2,1)"/>
+          </svg>
+          <div class="ring-center">
+            <span class="ring-pct" id="ring-pct">—</span>
+            <span class="ring-tiny">GPU util.</span>
+          </div>
+        </div>
+      </div>
+      <div class="mini-gauges">
+        <div class="mini-gauge-row">
+          <div class="mini-gauge-hdr">
+            <span class="mini-gauge-label">CPU Usage</span>
+            <span class="mini-gauge-val" id="hero-cpu" style="color:var(--green)">—</span>
+          </div>
+          <div class="mini-track"><div class="mini-fill cpu" id="hero-cpu-bar" style="width:0%"></div></div>
+        </div>
+        <div class="mini-gauge-row">
+          <div class="mini-gauge-hdr">
+            <span class="mini-gauge-label">Memory Usage</span>
+            <span class="mini-gauge-val" id="hero-mem" style="color:var(--purple)">—</span>
+          </div>
+          <div class="mini-track"><div class="mini-fill mem" id="hero-mem-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="gauge-meta">
+        <div>Jobs &nbsp;&nbsp;&nbsp;<b id="gm-jobs">—</b></div>
+        <div>Flagged &nbsp;<b id="gm-flagged" style="color:var(--orange)">—</b></div>
+        <div>GPU·h &nbsp;&nbsp;<b id="gm-hours">—</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stat-strip">
+    <div class="stat-card a2">
+      <div class="stat-lbl">GPU Jobs</div>
+      <div class="stat-val" id="u-stat-jobs">—</div>
+      <div class="stat-hint">completed</div>
+    </div>
+    <div class="stat-card a3">
+      <div class="stat-lbl">Avg GPU Utilization</div>
+      <div class="stat-val" id="u-stat-gpu">—<span class="u">%</span></div>
+      <div class="stat-hint">measured during job</div>
+    </div>
+    <div class="stat-card a4">
+      <div class="stat-lbl">Avg CPU Utilization</div>
+      <div class="stat-val" id="u-stat-cpu" style="color:var(--green)">—<span class="u" style="color:var(--muted)">%</span></div>
+      <div class="stat-hint">used vs. requested</div>
+    </div>
+    <div class="stat-card a5">
+      <div class="stat-lbl">Avg Memory Usage</div>
+      <div class="stat-val" id="u-stat-mem" style="color:var(--purple)">—<span class="u" style="color:var(--muted)">%</span></div>
+      <div class="stat-hint">peak used vs. requested</div>
+    </div>
+  </div>
+
+  <div class="sec-hdr">
+    <div class="sec-title">Job Breakdown</div>
+    <div class="thresh-note">GPU threshold: 30% &nbsp;·&nbsp; sorted by GPU eff ↑</div>
+  </div>
+  <div class="tcard">
+    <table>
+      <thead>
+        <tr>
+          <th>Job ID</th><th>Partition</th><th>Node(s)</th>
+          <th class="r">GPUs</th>
+          <th style="min-width:160px">GPU Utilization</th>
+          <th style="min-width:130px">CPU / Memory</th>
+          <th class="r">Duration</th><th class="c">Status</th>
+        </tr>
+      </thead>
+      <tbody id="user-job-tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ADMIN VIEW -->
+<div id="view-admin" style="display:none">
+  <div class="stat-strip">
+    <div class="stat-card a1">
+      <div class="stat-lbl">Total GPU Jobs</div>
+      <div class="stat-val" id="a-stat-jobs">—</div>
+      <div class="stat-hint">all users, 15 days</div>
+    </div>
+    <div class="stat-card a2">
+      <div class="stat-lbl">Cluster GPU Utilization</div>
+      <div class="stat-val" id="a-stat-gpu">—<span class="u">%</span></div>
+      <div class="stat-hint">avg across all jobs</div>
+    </div>
+    <div class="stat-card a3">
+      <div class="stat-lbl">Flagged Users</div>
+      <div class="stat-val" id="a-stat-flagged">—</div>
+      <div class="stat-hint">GPU avg below 30%</div>
+    </div>
+    <div class="stat-card a4">
+      <div class="stat-lbl">GPU·Hours Wasted</div>
+      <div class="stat-val" id="a-stat-wasted">—<span class="u">h</span></div>
+      <div class="stat-hint">est. underutilization</div>
+    </div>
+  </div>
+
+  <div class="sec-hdr"><div class="sec-title">User Summary</div></div>
+  <div class="filter-bar" id="admin-filter-bar">
+    <label>Sort by</label>
+    <select id="sort-select" onchange="applyAdminFilters()">
+      <option value="gpu_asc">GPU util ↑ (worst first)</option>
+      <option value="gpu_desc">GPU util ↓ (best first)</option>
+      <option value="user_az">Username A–Z</option>
+      <option value="hours_desc">GPU·Hours ↓</option>
+      <option value="flagged_desc">Flagged jobs ↓</option>
+    </select>
+    <div class="filter-sep"></div>
+    <label>Status</label>
+    <select id="status-filter" onchange="applyAdminFilters()">
+      <option value="">All</option>
+      <option value="low">Low only</option>
+      <option value="ok">OK only</option>
+      <option value="na">N/A only</option>
+    </select>
+    <div class="filter-sep"></div>
+    <label>Account</label>
+    <select id="account-filter" onchange="applyAdminFilters()">
+      <option value="">All accounts</option>
+    </select>
+    <div class="filter-sep"></div>
+    <label>User</label>
+    <input type="text" id="user-search" placeholder="search username…" oninput="applyAdminFilters()"
+      style="font-size:12px;font-family:var(--mono);padding:5px 10px;border:1px solid var(--border2);border-radius:5px;background:var(--surface);color:var(--text);outline:none;width:160px;transition:border-color .15s"
+      onfocus="this.style.borderColor='var(--blue)'" onblur="this.style.borderColor='var(--border2)'">
+    <span class="result-count" id="user-result-count"></span>
+  </div>
+  <div class="tcard">
+    <table>
+      <thead>
+        <tr>
+          <th>User</th><th>Account</th><th>Jobs</th>
+          <th style="min-width:150px"><span class="has-tip" data-tip="Average GPU utilization across all completed jobs">GPU Utilization</span></th>
+          <th style="min-width:130px">CPU / Memory</th>
+          <th class="r"><span class="has-tip" data-tip="Jobs with GPU avg below 30% / total jobs with GPU data">Flagged / Measured</span></th><th class="r">GPU·Hours</th><th class="c">Status</th>
+        </tr>
+      </thead>
+      <tbody id="admin-user-tbody"></tbody>
+    </table>
+  </div>
+
+  <div class="tcard">
+    <div class="coll-hdr" id="all-jobs-hdr" onclick="toggleAllJobs()">
+      <div class="sec-title" style="margin:0">All Jobs <span class="cnt-badge" id="all-jobs-cnt">0</span></div>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="coll-body" id="all-jobs-body">
+      <table>
+        <thead>
+          <tr>
+            <th>Job ID</th><th>User</th><th>Partition</th><th>Node(s)</th>
+            <th class="r">GPUs</th>
+            <th style="min-width:150px">GPU Utilization</th>
+            <th style="min-width:130px">CPU / Memory</th>
+            <th class="r">Duration</th><th class="c">Status</th>
+          </tr>
+        </thead>
+        <tbody id="admin-job-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="foot-l">
+    <div>GPU utilization via Prometheus &nbsp;·&nbsp; CPU &amp; memory via Slurm job accounting</div>
+    <div>ECE HPC · Ben-Gurion University of the Negev</div>
+  </div>
+  <button class="btn-ghost" onclick="exportCSV()">↓ Export CSV</button>
+</footer>
+
+</div>
+<script>
+const THRESHOLD = 30;
+const CURRENT_USER = "{{ username }}";
+const IS_ADMIN = {{ is_admin | tojson }};
+const ROOT = "{{ request.scope.get('root_path', '') }}";
+
+function gpuClass(v){if(v==null)return'na';if(v<THRESHOLD)return'bad';if(v>=70)return'excellent';return'good'}
+function badge(cls){
+  const m={
+    excellent:['badge-excellent','★ Excellent','GPU avg ≥ 70% — great utilisation'],
+    good:     ['badge-ok',       '✓ OK',        'GPU avg 30–69% — above threshold'],
+    bad:      ['badge-bad',      '✕ Low',       'GPU avg < 30% — significant underutilisation'],
+    na:       ['badge-na',       '— N/A',       'Insufficient Prometheus data for this job window']
+  };
+  const[c,l,tip]=m[cls]||m.na;
+  return`<span class="badge ${c} has-tip" data-tip="${tip}">${l}</span>`;
+}
+function gpuBar(v){const cls=gpuClass(v);return`<div class="gbar"><div class="gtrack"><div class="gfill ${cls}" style="width:${v??0}%"></div></div><span class="gval ${cls}">${v!=null?v.toFixed(1)+'%':'—'}</span></div>`}
+function resCells(cpu,mem){return`<div class="res-cell"><div class="res-row"><span class="res-key">CPU</span><div class="res-track"><div class="res-fill cpu" style="width:${cpu??0}%"></div></div><span class="res-val">${cpu!=null?cpu.toFixed(0)+'%':'—'}</span></div><div class="res-row"><span class="res-key">MEM</span><div class="res-track"><div class="res-fill mem" style="width:${mem??0}%"></div></div><span class="res-val">${mem!=null?mem.toFixed(0)+'%':'—'}</span></div></div>`}
+function avg(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}
+
+function aggregateUsers(jobs){
+  const m={};
+  jobs.forEach(j=>{
+    if(!m[j.user])m[j.user]={user:j.user,jobs:0,gpus:[],cpus:[],mems:[],flagged:0,hours:0};
+    const u=m[j.user];u.jobs++;
+    if(j.gpu!=null)u.gpus.push(j.gpu);
+    if(j.cpu!=null)u.cpus.push(j.cpu);
+    if(j.mem!=null)u.mems.push(j.mem);
+    if(j.gpu!=null&&j.gpu<THRESHOLD)u.flagged++;
+    u.hours+=j.gpus*j.dur;
+  });
+  return Object.values(m).map(u=>({...u,avgGpu:avg(u.gpus),avgCpu:avg(u.cpus),avgMem:avg(u.mems),isFlagged:u.gpus.length?avg(u.gpus)<THRESHOLD:false})).sort((a,b)=>(a.avgGpu??999)-(b.avgGpu??999));
+}
+
+function renderUserView(data){
+  // API fields: data.jobs[].{job_id,user,partition,nodes,gpus,gpu_eff,cpu_eff,mem_eff,duration_h,flagged}
+  // data.summary.{job_count,avg_gpu_eff,avg_cpu_eff,avg_mem_eff,flagged,gpu_hours}
+  const jobs = data.jobs;
+  const s    = data.summary;
+  _cachedJobs = jobs;
+  document.getElementById('hero-initials').textContent = CURRENT_USER.slice(0,2).toUpperCase();
+  document.getElementById('hero-name').textContent     = CURRENT_USER;
+  document.getElementById('hero-sub').textContent      = `${s.job_count} GPU job${s.job_count!==1?'s':''} · last 30 days`;
+
+  const avgGpu = s.avg_gpu_eff;
+  const avgCpu = s.avg_cpu_eff;
+  const avgMem = s.avg_mem_eff;
+  const flagged = s.flagged;
+  const hours   = s.gpu_hours;
+
+  const circ=2*Math.PI*37;
+  const pct=avgGpu??0;
+  document.getElementById('ring-fill').style.strokeDashoffset=circ-(pct/100)*circ;
+  const rc={excellent:'var(--green)',good:'var(--blue)',bad:'var(--danger)',na:'var(--dim)'};
+  const cls=gpuClass(avgGpu);
+  document.getElementById('ring-fill').setAttribute('stroke',rc[cls]);
+  document.getElementById('ring-pct').textContent=avgGpu!=null?avgGpu.toFixed(1)+'%':'—';
+  document.getElementById('ring-pct').style.color=rc[cls];
+
+  document.getElementById('hero-cpu').textContent=avgCpu!=null?avgCpu.toFixed(1)+'%':'—';
+  document.getElementById('hero-cpu-bar').style.width=(avgCpu??0)+'%';
+  document.getElementById('hero-mem').textContent=avgMem!=null?avgMem.toFixed(1)+'%':'—';
+  document.getElementById('hero-mem-bar').style.width=(avgMem??0)+'%';
+  document.getElementById('gm-jobs').textContent=jobs.length;
+  document.getElementById('gm-flagged').textContent=flagged;
+  document.getElementById('gm-hours').textContent=hours.toFixed(1)+'h';
+
+  document.getElementById('u-stat-jobs').textContent=jobs.length;
+  document.getElementById('u-stat-gpu').innerHTML=(avgGpu!=null?avgGpu.toFixed(1):'—')+'<span class="u">%</span>';
+  document.getElementById('u-stat-cpu').innerHTML=(avgCpu!=null?avgCpu.toFixed(1):'—')+'<span class="u" style="color:var(--muted)">%</span>';
+  document.getElementById('u-stat-mem').innerHTML=(avgMem!=null?avgMem.toFixed(1):'—')+'<span class="u" style="color:var(--muted)">%</span>';
+
+  const tbody=document.getElementById('user-job-tbody');
+  if(!jobs.length){tbody.innerHTML='<tr><td colspan="8" class="empty">No GPU jobs in the last 30 days.</td></tr>';return}
+  tbody.innerHTML=jobs.map((j,i)=>`<tr style="animation:up .25s ${i*.04}s ease both">
+    <td class="mono">${j.job_id}</td>
+    <td><span class="ptag">${j.partition}</span></td>
+    <td class="mono" style="color:var(--muted);font-size:11px">${j.nodes.join(', ')}</td>
+    <td class="mono r">${j.gpus}</td>
+    <td>${gpuBar(j.gpu_eff)}</td>
+    <td>${resCells(j.cpu_eff,j.mem_eff)}</td>
+    <td class="mono r">${j.duration_h.toFixed(1)}h</td>
+    <td class="c">${badge(gpuClass(j.gpu_eff))}</td>
+  </tr>`).join('');
+}
+
+let _adminData = null;
+
+function renderAdminView(data){
+  _adminData = data;
+  // Populate account filter
+  const accounts = [...new Set(data.users.map(u => u.account).filter(Boolean))].sort();
+  const acctSel = document.getElementById('account-filter');
+  const currentAcct = acctSel.value;
+  acctSel.innerHTML = '<option value="">All accounts</option>';
+  accounts.forEach(a => {
+    const opt = document.createElement('option');
+    opt.value = a; opt.textContent = a;
+    if (a === currentAcct) opt.selected = true;
+    acctSel.appendChild(opt);
+  });
+  // API fields: data.summary.{total_jobs,avg_gpu_eff,flagged_users,gpu_hours_wasted}
+  // data.users[].{user,jobs,avg_gpu_eff,avg_cpu_eff,avg_mem_eff,flagged,gpu_hours,is_flagged}
+  // data.jobs[] same as /api/me jobs
+  const s = data.summary;
+
+  document.getElementById('a-stat-jobs').textContent     = s.total_jobs;
+  document.getElementById('a-stat-gpu').innerHTML        = (s.avg_gpu_eff??'—') + '<span class="u">%</span>';
+  document.getElementById('a-stat-flagged').textContent  = s.flagged_users;
+  document.getElementById('a-stat-wasted').innerHTML     = s.gpu_hours_wasted + '<span class="u">h</span>';
+
+  document.getElementById('admin-user-tbody').innerHTML = data.users.map((u,i)=>`<tr style="animation:up .25s ${i*.04}s ease both">
+    <td><div class="ucell"><div class="uavatar">${u.user.slice(0,2).toUpperCase()}</div><span class="uname">${u.user}</span></div></td>
+    <td class="mono r">${u.jobs}</td>
+    <td>${gpuBar(u.avg_gpu_eff)}</td>
+    <td>${resCells(u.avg_cpu_eff,u.avg_mem_eff)}</td>
+    <td class="mono r"><span class="has-tip" data-tip="${u.flagged} jobs below 30% GPU out of ${u.measured_jobs} measured" style="color:${u.flagged>0?'var(--orange)':'var(--muted)'}">${u.flagged}/${u.measured_jobs}</span></td>
+    <td class="mono r">${u.gpu_hours.toFixed(1)}</td>
+    <td class="c">${badge(gpuClass(u.avg_gpu_eff))}</td>
+  </tr>`).join('');
+
+  document.getElementById('all-jobs-cnt').textContent = data.jobs.length;
+  document.getElementById('admin-job-tbody').innerHTML = data.jobs.map((j,i)=>`<tr style="animation:up .2s ${i*.02}s ease both">
+    <td class="mono">${j.job_id}</td>
+    <td class="mono">${j.user}</td>
+    <td><span class="ptag">${j.partition}</span></td>
+    <td class="mono" style="color:var(--muted);font-size:11px">${j.nodes.join(', ')}</td>
+    <td class="mono r">${j.gpus}</td>
+    <td>${gpuBar(j.gpu_eff)}</td>
+    <td>${resCells(j.cpu_eff,j.mem_eff)}</td>
+    <td class="mono r">${j.duration_h.toFixed(1)}h</td>
+    <td class="c">${badge(gpuClass(j.gpu_eff))}</td>
+  </tr>`).join('');
+}
+
+let _adminLoaded = false;
+
+function applyAdminFilters(){
+  if (!_adminData) return;
+  const sort   = document.getElementById('sort-select').value;
+  const status = document.getElementById('status-filter').value;
+  const acct   = document.getElementById('account-filter').value;
+
+  let users = [..._adminData.users];
+
+  // Filter by status
+  if (status === 'low') users = users.filter(u => u.avg_gpu_eff !== null && u.avg_gpu_eff < 30);
+  if (status === 'ok')  users = users.filter(u => u.avg_gpu_eff !== null && u.avg_gpu_eff >= 30);
+  if (status === 'na')  users = users.filter(u => u.avg_gpu_eff === null);
+
+  // Filter by account
+  if (acct) users = users.filter(u => u.account === acct);
+
+  // Filter by username search
+  const userSearch = document.getElementById('user-search').value.trim().toLowerCase();
+  if (userSearch) users = users.filter(u => u.user.toLowerCase().includes(userSearch));
+
+  // Sort
+  if (sort === 'gpu_asc')      users.sort((a,b) => (a.avg_gpu_eff??999) - (b.avg_gpu_eff??999));
+  if (sort === 'gpu_desc')     users.sort((a,b) => (b.avg_gpu_eff??-1)  - (a.avg_gpu_eff??-1));
+  if (sort === 'user_az')      users.sort((a,b) => a.user.localeCompare(b.user));
+  if (sort === 'hours_desc')   users.sort((a,b) => b.gpu_hours - a.gpu_hours);
+  if (sort === 'flagged_desc') users.sort((a,b) => b.flagged - a.flagged);
+
+  document.getElementById('user-result-count').textContent =
+    users.length + ' of ' + _adminData.users.length + ' users';
+
+  document.getElementById('admin-user-tbody').innerHTML = users.map((u,i) => `<tr style="animation:up .25s ${i*.03}s ease both">
+    <td><div class="ucell"><div class="uavatar">${u.user.slice(0,2).toUpperCase()}</div><span class="uname">${u.user}</span></div></td>
+    <td class="mono" style="font-size:11px;color:var(--muted)">${u.account||'—'}</td>
+    <td class="mono r">${u.jobs}</td>
+    <td>${gpuBar(u.avg_gpu_eff)}</td>
+    <td>${resCells(u.avg_cpu_eff,u.avg_mem_eff)}</td>
+    <td class="mono r"><span class="has-tip" data-tip="${u.flagged} jobs below 30% GPU out of ${u.measured_jobs} measured" style="color:${u.flagged>0?'var(--orange)':'var(--muted)'}">${u.flagged}/${u.measured_jobs}</span></td>
+    <td class="mono r">${u.gpu_hours.toFixed(1)}</td>
+    <td class="c">${badge(gpuClass(u.avg_gpu_eff))}</td>
+  </tr>`).join('');
+}
+
+function setView(v){
+  document.getElementById('view-user').style.display=v==='user'?'':'none';
+  document.getElementById('view-admin').style.display=v==='admin'?'':'none';
+  document.querySelectorAll('.vtab').forEach((b,i)=>b.classList.toggle('active',(v==='user'&&i===0)||(v==='admin'&&i===1)));
+  if (v==='admin' && !_adminLoaded) {
+    _adminLoaded = true;
+    fetch(ROOT + '/api/all').then(r => r.json()).then(renderAdminView).catch(e => console.error('Admin load failed:', e));
+  }
+}
+
+function toggleAllJobs(){
+  document.getElementById('all-jobs-hdr').classList.toggle('open');
+  document.getElementById('all-jobs-body').classList.toggle('open');
+}
+
+function exportCSV(){
+  const jobs=_cachedJobs;
+  const rows=[['job_id','user','partition','nodes','gpus','gpu_eff%','cpu_eff%','mem_eff%','duration_h','flagged']];
+  jobs.forEach(j=>rows.push([j.job_id,j.user,j.partition,j.nodes.join(';'),j.gpus,j.gpu??'',j.cpu??'',j.mem??'',j.dur,j.gpu!=null&&j.gpu<THRESHOLD?'yes':'no']));
+  const a=document.createElement('a');
+  a.href='data:text/csv,'+encodeURIComponent(rows.map(r=>r.join(',')).join('\n'));
+  a.download=`gseff_${CURRENT_USER}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+document.getElementById('gen-time').textContent=new Date().toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+
+// ── Init ─────────────────────────────────────────────────
+document.getElementById('gen-time').textContent = new Date().toLocaleString('en-GB',{
+  day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
+});
+
+if (IS_ADMIN) {
+  document.getElementById('admin-tab').style.display = '';
+}
+
+function refreshData() {
+  const btn = document.getElementById('refresh-btn');
+  btn.textContent = '↻ Loading…';
+  btn.disabled = true;
+  _adminLoaded = false;
+  const currentView = document.getElementById('view-admin').style.display !== 'none' ? 'admin' : 'user';
+  loadAll().then(() => {
+    if (currentView === 'admin') {
+      return fetch(ROOT + '/api/all').then(r => r.json()).then(data => { _adminLoaded = true; renderAdminView(data); });
+    }
+  }).finally(() => {
+    btn.textContent = '↻ Refresh';
+    btn.disabled = false;
+    document.getElementById('gen-time').textContent = new Date().toLocaleString('en-GB',{
+      day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit'
+    });
+  });
+}
+
+async function loadAll() {
+  // Show loading state
+  document.getElementById('user-job-tbody').innerHTML =
+    '<tr><td colspan="8" class="empty">Loading…</td></tr>';
+
+  try {
+    const me = await fetch(ROOT + '/api/me').then(r => {
+      if (!r.ok) throw new Error(r.status);
+      return r.json();
+    });
+    renderUserView(me);
+  } catch(e) {
+    document.getElementById('user-job-tbody').innerHTML =
+      '<tr><td colspan="8" class="empty">Failed to load jobs: ' + e.message + '</td></tr>';
+  }
+
+  // Admin data loaded lazily on first click of "All Users" tab
+}
+
+loadAll();
+</script>
+</body>
+</html>
+
