@@ -153,6 +153,28 @@ footer{border-top:1px solid var(--border);padding-top:20px;display:flex;align-it
 .btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
 .empty{padding:40px;text-align:center;color:var(--dim);font-family:var(--mono);font-size:12px}
 
+.user-row{cursor:pointer}
+.user-row:hover td{background:#f6f8fa}
+.user-row.expanded td{border-bottom:none}
+.expand-arrow{font-size:9px;color:var(--dim);display:inline-block;transition:transform .15s;margin-right:6px;vertical-align:middle}
+.user-row.expanded .expand-arrow{transform:rotate(90deg)}
+
+.user-detail-row td{
+  background:var(--blue-bg);
+  border-bottom:1px solid var(--border);
+  padding:10px 16px 14px 16px;
+}
+.user-detail-inner{overflow-x:auto}
+.mini-job-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+.mini-job-table th{
+  text-align:left;color:var(--muted);font-size:10px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.07em;
+  padding:6px 10px;background:var(--surface);border-bottom:1px solid var(--border);
+}
+.mini-job-table td{padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text-dim);vertical-align:middle}
+.mini-job-table tr:last-child td{border-bottom:none}
+.mini-job-table tbody tr:hover td{background:rgba(255,255,255,.6)}
+
 .filter-bar{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .filter-bar label{font-size:11px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
 .filter-bar select{
@@ -464,7 +486,8 @@ function renderUserView(data){
 
   const tbody=document.getElementById('user-job-tbody');
   if(!jobs.length){tbody.innerHTML='<tr><td colspan="8" class="empty">No GPU jobs in the last 30 days.</td></tr>';return}
-  tbody.innerHTML=jobs.map((j,i)=>`<tr style="animation:up .25s ${i*.04}s ease both">
+  const sortedJobs = [...jobs].sort((a,b) => b.job_id - a.job_id);
+  tbody.innerHTML=sortedJobs.map((j,i)=>`<tr style="animation:up .25s ${i*.04}s ease both">
     <td class="mono">${j.job_id}</td>
     <td><span class="ptag">${j.partition}</span></td>
     <td class="mono" style="color:var(--muted);font-size:11px">${j.nodes.join(', ')}</td>
@@ -501,16 +524,6 @@ function renderAdminView(data){
   document.getElementById('a-stat-flagged').textContent  = s.flagged_users;
   document.getElementById('a-stat-wasted').innerHTML     = s.gpu_hours_wasted + '<span class="u">h</span>';
 
-  document.getElementById('admin-user-tbody').innerHTML = data.users.map((u,i)=>`<tr style="animation:up .25s ${i*.04}s ease both">
-    <td><div class="ucell"><div class="uavatar">${u.user.slice(0,2).toUpperCase()}</div><span class="uname">${u.user}</span></div></td>
-    <td class="mono r">${u.jobs}</td>
-    <td>${gpuBar(u.avg_gpu_eff)}</td>
-    <td>${resCells(u.avg_cpu_eff,u.avg_mem_eff)}</td>
-    <td class="mono r"><span class="has-tip" data-tip="${u.flagged} jobs below 30% GPU out of ${u.measured_jobs} measured" style="color:${u.flagged>0?'var(--orange)':'var(--muted)'}">${u.flagged}/${u.measured_jobs}</span></td>
-    <td class="mono r">${u.gpu_hours.toFixed(1)}</td>
-    <td class="c">${badge(gpuClass(u.avg_gpu_eff))}</td>
-  </tr>`).join('');
-
   document.getElementById('all-jobs-cnt').textContent = data.jobs.length;
   document.getElementById('admin-job-tbody').innerHTML = data.jobs.map((j,i)=>`<tr style="animation:up .2s ${i*.02}s ease both">
     <td class="mono">${j.job_id}</td>
@@ -523,6 +536,7 @@ function renderAdminView(data){
     <td class="mono r">${j.duration_h.toFixed(1)}h</td>
     <td class="c">${badge(gpuClass(j.gpu_eff))}</td>
   </tr>`).join('');
+  applyAdminFilters();
 }
 
 let _adminLoaded = false;
@@ -558,16 +572,62 @@ function applyAdminFilters(){
   document.getElementById('user-result-count').textContent =
     users.length + ' of ' + _adminData.users.length + ' users';
 
-  document.getElementById('admin-user-tbody').innerHTML = users.map((u,i) => `<tr style="animation:up .25s ${i*.03}s ease both">
-    <td><div class="ucell"><div class="uavatar">${u.user.slice(0,2).toUpperCase()}</div><span class="uname">${u.user}</span></div></td>
-    <td class="mono" style="font-size:11px;color:var(--muted)">${u.account||'—'}</td>
-    <td class="mono r">${u.jobs}</td>
-    <td>${gpuBar(u.avg_gpu_eff)}</td>
-    <td>${resCells(u.avg_cpu_eff,u.avg_mem_eff)}</td>
-    <td class="mono r"><span class="has-tip" data-tip="${u.flagged} jobs below 30% GPU out of ${u.measured_jobs} measured" style="color:${u.flagged>0?'var(--orange)':'var(--muted)'}">${u.flagged}/${u.measured_jobs}</span></td>
-    <td class="mono r">${u.gpu_hours.toFixed(1)}</td>
-    <td class="c">${badge(gpuClass(u.avg_gpu_eff))}</td>
-  </tr>`).join('');
+  document.getElementById('admin-user-tbody').innerHTML = users.map((u,i) => {
+    const userJobs = (_adminData.jobs || [])
+      .filter(j => j.user === u.user)
+      .sort((a,b) => b.job_id - a.job_id)
+      .slice(0, 5);
+
+    const detailRows = userJobs.length ? userJobs.map(j => `
+      <tr>
+        <td>${j.job_id}</td>
+        <td><span class="ptag">${j.partition}</span></td>
+        <td style="color:var(--muted);font-size:10px">${j.nodes.join(', ')}</td>
+        <td style="text-align:right">${j.gpus}</td>
+        <td>${gpuBar(j.gpu_eff)}</td>
+        <td>${resCells(j.cpu_eff, j.mem_eff)}</td>
+        <td style="text-align:right">${j.duration_h.toFixed(1)}h</td>
+        <td style="text-align:center">${badge(gpuClass(j.gpu_eff))}</td>
+      </tr>`).join('')
+    : `<tr><td colspan="8" class="empty" style="padding:14px">No job data available.</td></tr>`;
+
+    return `
+    <tr class="user-row" style="animation:up .25s ${i*.03}s ease both" onclick="toggleUserDetail('ud-${u.user}', this)">
+      <td><span class="expand-arrow">▶</span><div class="ucell" style="display:inline-flex"><div class="uavatar">${u.user.slice(0,2).toUpperCase()}</div><span class="uname">${u.user}</span></div></td>
+      <td class="mono" style="font-size:11px;color:var(--muted)">${u.account||'—'}</td>
+      <td class="mono r">${u.jobs}</td>
+      <td>${gpuBar(u.avg_gpu_eff)}</td>
+      <td>${resCells(u.avg_cpu_eff,u.avg_mem_eff)}</td>
+      <td class="mono r"><span class="has-tip" data-tip="${u.flagged} jobs below 30% GPU out of ${u.measured_jobs} measured" style="color:${u.flagged>0?'var(--orange)':'var(--muted)'}">${u.flagged}/${u.measured_jobs}</span></td>
+      <td class="mono r">${u.gpu_hours.toFixed(1)}</td>
+      <td class="c">${badge(gpuClass(u.avg_gpu_eff))}</td>
+    </tr>
+    <tr class="user-detail-row" id="ud-${u.user}" style="display:none">
+      <td colspan="8">
+        <div class="user-detail-inner">
+          <table class="mini-job-table">
+            <thead><tr>
+              <th>Job ID</th><th>Partition</th><th>Node(s)</th>
+              <th style="text-align:right">GPUs</th>
+              <th style="min-width:140px">GPU Util</th>
+              <th style="min-width:120px">CPU / Mem</th>
+              <th style="text-align:right">Duration</th>
+              <th style="text-align:center">Status</th>
+            </tr></thead>
+            <tbody>${detailRows}</tbody>
+          </table>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function toggleUserDetail(id, row) {
+  const detail = document.getElementById(id);
+  if (!detail) return;
+  const isOpen = detail.style.display !== 'none';
+  detail.style.display = isOpen ? 'none' : 'table-row';
+  row.classList.toggle('expanded', !isOpen);
 }
 
 function setView(v){
