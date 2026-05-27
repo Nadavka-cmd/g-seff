@@ -106,7 +106,7 @@ td.mono{font-family:var(--mono);font-size:12px}
 .res-track{flex:1;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
 .res-fill{height:100%;border-radius:2px;transition:width .7s cubic-bezier(.4,0,.2,1)}
 .res-fill.cpu{background:var(--green)}.res-fill.mem{background:var(--purple)}
-.res-val{font-family:var(--mono);font-size:10px;color:var(--muted);min-width:32px;text-align:right}
+.res-val{font-family:var(--mono);font-size:10px;color:var(--muted);min-width:32px;text-align:right}.res-req{font-family:var(--mono);font-size:10px;color:var(--dim);margin-left:4px;white-space:nowrap}
 
 .badge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:4px}
 .badge-ok{background:var(--blue-bg);color:var(--blue);border:1px solid var(--blue-lt)}
@@ -429,7 +429,12 @@ function badge(cls){
   return`<span class="badge ${c} has-tip" data-tip="${tip}">${l}</span>`;
 }
 function gpuBar(v){const cls=gpuClass(v);return`<div class="gbar"><div class="gtrack"><div class="gfill ${cls}" style="width:${v??0}%"></div></div><span class="gval ${cls}">${v!=null?v.toFixed(1)+'%':'—'}</span></div>`}
-function resCells(cpu,mem){return`<div class="res-cell"><div class="res-row"><span class="res-key">CPU</span><div class="res-track"><div class="res-fill cpu" style="width:${cpu??0}%"></div></div><span class="res-val">${cpu!=null?cpu.toFixed(0)+'%':'—'}</span></div><div class="res-row"><span class="res-key">MEM</span><div class="res-track"><div class="res-fill mem" style="width:${mem??0}%"></div></div><span class="res-val">${mem!=null?mem.toFixed(0)+'%':'—'}</span></div></div>`}
+function fmtMem(mb){if(mb==null)return null;if(mb>=1024)return(mb/1024).toFixed(0)+'G';return mb+'M'}
+function resCells(cpu,mem,reqCpus,reqMemMb){
+  const cpuReq=reqCpus!=null?`<span class="res-req">${reqCpus}c</span>`:'';
+  const memReq=reqMemMb!=null?`<span class="res-req">${fmtMem(reqMemMb)}</span>`:'';
+  return`<div class="res-cell"><div class="res-row"><span class="res-key">CPU</span><div class="res-track"><div class="res-fill cpu" style="width:${cpu??0}%"></div></div><span class="res-val">${cpu!=null?cpu.toFixed(0)+'%':'—'}</span>${cpuReq}</div><div class="res-row"><span class="res-key">MEM</span><div class="res-track"><div class="res-fill mem" style="width:${mem??0}%"></div></div><span class="res-val">${mem!=null?mem.toFixed(0)+'%':'—'}</span>${memReq}</div></div>`
+}
 function avg(a){return a.length?a.reduce((x,y)=>x+y,0)/a.length:null}
 
 function aggregateUsers(jobs){
@@ -493,7 +498,7 @@ function renderUserView(data){
     <td class="mono" style="color:var(--muted);font-size:11px">${j.nodes.join(', ')}</td>
     <td class="mono r">${j.gpus}</td>
     <td>${gpuBar(j.gpu_eff)}</td>
-    <td>${resCells(j.cpu_eff,j.mem_eff)}</td>
+    <td>${resCells(j.cpu_eff,j.mem_eff,j.req_cpus,j.req_mem_mb)}</td>
     <td class="mono r">${j.duration_h.toFixed(1)}h</td>
     <td class="c">${badge(gpuClass(j.gpu_eff))}</td>
   </tr>`).join('');
@@ -532,7 +537,7 @@ function renderAdminView(data){
     <td class="mono" style="color:var(--muted);font-size:11px">${j.nodes.join(', ')}</td>
     <td class="mono r">${j.gpus}</td>
     <td>${gpuBar(j.gpu_eff)}</td>
-    <td>${resCells(j.cpu_eff,j.mem_eff)}</td>
+    <td>${resCells(j.cpu_eff,j.mem_eff,j.req_cpus,j.req_mem_mb)}</td>
     <td class="mono r">${j.duration_h.toFixed(1)}h</td>
     <td class="c">${badge(gpuClass(j.gpu_eff))}</td>
   </tr>`).join('');
@@ -585,7 +590,7 @@ function applyAdminFilters(){
         <td style="color:var(--muted);font-size:10px">${j.nodes.join(', ')}</td>
         <td style="text-align:right">${j.gpus}</td>
         <td>${gpuBar(j.gpu_eff)}</td>
-        <td>${resCells(j.cpu_eff, j.mem_eff)}</td>
+        <td>${resCells(j.cpu_eff,j.mem_eff,j.req_cpus,j.req_mem_mb)}</td>
         <td style="text-align:right">${j.duration_h.toFixed(1)}h</td>
         <td style="text-align:center">${badge(gpuClass(j.gpu_eff))}</td>
       </tr>`).join('')

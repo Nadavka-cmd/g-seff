@@ -93,6 +93,15 @@ def get_jobs_sacct(user: Optional[str] = None) -> list[dict]:
 
         nodes = _expand_nodelist(nodelist)
 
+        try:
+            req_cpus = int(alloccpus.strip())
+        except (ValueError, AttributeError):
+            req_cpus = None
+
+        req_mem_mb = _parse_mem_bytes(reqmem.strip())
+        if req_mem_mb is not None:
+            req_mem_mb = round(req_mem_mb / (1024 ** 2))
+
         parent_jobs[job_id] = {
             "job_id":     job_id,
             "user":       user_,
@@ -108,6 +117,8 @@ def get_jobs_sacct(user: Optional[str] = None) -> list[dict]:
             "flagged":    False,
             "reqmem":     reqmem,
             "account":    account,
+            "req_cpus":   req_cpus,
+            "req_mem_mb": req_mem_mb,
         }
 
     # Enrich with batch step CPU/mem
@@ -278,6 +289,8 @@ def serialize_job(j: dict) -> dict:
         "mem_eff":    round(j["mem_eff"], 1) if j["mem_eff"] is not None else None,
         "duration_h": round(j["duration_h"], 2),
         "flagged":    j["flagged"],
+        "req_cpus":   j.get("req_cpus"),
+        "req_mem_mb": j.get("req_mem_mb"),
     }
 
 
